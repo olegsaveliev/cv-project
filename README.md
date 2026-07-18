@@ -175,12 +175,23 @@ Getting the Pi onto the network and logging in the first time is where most begi
 
 Confirm the camera works *before* adding AI, so you know your hardware is good.
 
-**USB webcam:**
+**USB webcam.** Plug it into a blue (USB 3.0) port, then check the Pi actually sees it:
+
+```bash
+lsusb              # should list your webcam, e.g. "Logitech, Inc. Webcam C270"
+ls /dev/video*     # should show /dev/video0
+```
+
+`lsusb` lists USB devices; `/dev/video0` is the Linux device file for the first camera. (On a Pi you'll also see many other `/dev/videoNN` entries — those are the Pi's internal video hardware, ignore them.)
+
+Then capture a test photo:
+
 ```bash
 sudo apt install -y fswebcam
 fswebcam test.jpg
 ```
-Open `test.jpg` (in VS Code's file explorer). If you see a picture, the camera works.
+
+Open `test.jpg` in VS Code's file explorer. If you see a picture, the camera works. (Don't worry if it's dark — early frames are often underexposed before the sensor adjusts.)
 
 **Raspberry Pi ribbon camera:**
 ```bash
@@ -310,27 +321,42 @@ It correctly found **4 people and 1 bus**. Open `runs/detect/predict/bus.jpg` to
 
 > **A quirk worth knowing:** `pip install ultralytics` pulls in a pile of `nvidia-*` CUDA packages as PyTorch dependencies. The Pi has no NVIDIA GPU, so they sit unused — harmless, just some wasted disk space.
 
-**Now live, on the camera.** Create a file called `detect_live.py` with this content:
+**Now live, on the camera.** Create a file called `detect_live.py`.
+
+**If your Pi is headless** (no monitor attached — the setup this project uses), YOLO can't open a preview window. Instead, save annotated frames and print what it sees:
 
 ```python
 from ultralytics import YOLO
 
-model = YOLO("yolo11n.pt")   # the small, Pi-friendly model
+model = YOLO("models/yolo11n.pt")
 
-# source=0 = the first camera (USB webcam or Pi camera)
-# show=True = open a window with live boxes
-for _ in model.predict(source=0, show=True, stream=True):
-    pass
+# source=0  = the first camera (/dev/video0)
+# stream=True = process frames one at a time as they arrive
+# save=True = write annotated frames to runs/detect/
+for r in model.predict(source=0, stream=True, save=True):
+    print(r.verbose())
 ```
+
+**If you have a monitor plugged into the Pi**, use `show=True` instead of `save=True` for a live window.
 
 Run it:
 ```bash
 python detect_live.py
 ```
 
-A window opens with your live camera feed and labeled boxes. Wave a cup or your phone in front of it. **This is the core of the project working.** 🎉
+Real output from this build (a person sitting in front of the webcam):
 
-> **Speed note:** on a Pi 5 with a normal webcam, expect around 3 FPS based on the 320ms inference time measured above. That's expected — the small computer is doing all the AI work. It's a real engineering tradeoff, not a bug (more in [tradeoffs](#what-i-learned)).
+```
+1/1: 0... Success ✅ (inf frames of shape 640x480 at 30.00 FPS)
+0: 480x640 1 person, 319.8ms
+0: 480x640 1 person, 292.6ms
+0: 480x640 1 person, 289.3ms
+...
+```
+
+**This is the core of the project working.** 🎉 Press `Ctrl+C` to stop — it prints a long traceback, which is just the interrupt landing mid-inference, not a crash.
+
+> **Speed note — the honest number:** the camera delivers 30 FPS, but YOLO processes about **3.4 frames per second** (~290ms each) on a Pi 5 CPU. The camera isn't the bottleneck; the processor is. That's the real edge-hardware tradeoff, and it's worth stating plainly rather than hiding (more in [tradeoffs](#what-i-learned)).
 
 ---
 

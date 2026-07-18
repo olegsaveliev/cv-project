@@ -7,11 +7,12 @@
 ---
 
 ## Where we are right now
-- **Current phase:** ✅ YOLO installed and **working** — still-image detection confirmed (4 persons + 1 bus on the test image, 320ms inference). Project structure created, Git initialized, pushed to GitHub.
-- **Next step:** Wait for the webcam. When it arrives: `fswebcam test.jpg` to confirm capture, then create `detect_live.py` for live detection. Meanwhile: choose the custom object and start collecting photos.
-- **Camera status:** ⏳ Logitech webcam NOT yet arrived — the only remaining blocker for v1.
-- **Key facts:** hostname `mypi` → `mypi.local` · username **`oleg`** · project at `/home/oleg/cv-project` · GitHub: https://github.com/olegsaveliev/cv-project · branch `main` · venv activate: `source ~/cv-project/venv/bin/activate`
-- **Measured baseline:** 320ms inference per image on Pi 5 CPU ≈ **3 FPS** live. Use this honest number in the README.
+- **Current phase:** ✅ **v1 base COMPLETE.** Webcam (Logitech C270) working, live detection running on the Pi — correctly detects "1 person" continuously at ~290ms/frame (**~3.4 FPS**).
+- **Next step:** Choose the custom object → collect 50–150 photos → label in Roboflow → train on Colab → deploy `best.pt`. Also: record demo GIF for the README.
+- **Camera status:** ✅ Arrived and confirmed working. `lsusb` shows `Logitech, Inc. Webcam C270`, device at `/dev/video0`.
+- **Key facts:** hostname `mypi` → `mypi.local` · username **`oleg`** · project at `/home/oleg/cv-project` · GitHub: https://github.com/olegsaveliev/cv-project · branch `main` · venv: `source ~/cv-project/venv/bin/activate`
+- **Measured baseline:** ~290–320ms inference on Pi 5 CPU ≈ **3–3.4 FPS** live. Honest README number.
+- **Headless note:** no monitor on the Pi, so `show=True` can't open a window. `detect_live.py` uses `save=True` + printed labels instead.
 - **Last updated:** (set this each session)
 
 ---
@@ -46,15 +47,15 @@
 - [ ] ✅ (Optional) SSH key set up so no password each time
 
 ### Phase 3 — Camera
-- [ ] 📷 Camera connected *(waiting on webcam)*
-- [ ] 📷 Camera confirmed working (webcam: `fswebcam test.jpg` / ribbon: `rpicam-hello`)
+- [x] 📷 Camera connected (Logitech C270 into a blue USB 3.0 port)
+- [x] 📷 Camera confirmed working (`lsusb` → C270; `/dev/video0` present; `fswebcam test.jpg` captured an image)
 
 ### Phase 4 — Generic detection (v1 base)
 - [x] ✅ `venv` created, `ultralytics` installed (ultralytics 8.4.100, torch 2.13.0, opencv 5.0.0.93)
 - [x] ✅ Still-image detection works — `yolo predict model=yolo11n.pt source=bus.jpg` → 4 persons, 1 bus, 320.3ms
 - [x] ✅ Project structure created (`models/`, `docs/`, `data/`, `requirements.txt`, `.gitignore`)
 - [x] ✅ Git initialized, first commits made, pushed to GitHub (`main` branch)
-- [ ] 📷 Live camera detection works (`detect_live.py`) *(needs webcam)*
+- [x] 📷 Live camera detection works (`detect_live.py`) — ~290ms/frame, detects "1 person" reliably
 
 ### Phase 5 — Custom object (the showcase)
 - [ ] ✅ Custom object chosen: __________
@@ -103,6 +104,9 @@
 - **VS Code extensions must be installed on the *remote* side.** With Remote-SSH, extensions that touch project files (e.g. Claude Code) show "Install in SSH: mypi.local" — click that, or they stay disabled in the workspace.
 - **`pip install ultralytics` pulls dozens of `nvidia-*` CUDA packages.** The Pi has no NVIDIA GPU; they're unused PyTorch dependencies. Harmless, just disk space.
 - **Careful which VS Code window is which.** One window was the Mac (`/Users/oleg/Desktop/cv-project`), the other the Pi (`SSH: mypi.local`). Work in the SSH one — check the green indicator bottom-left and that the terminal prompt reads `oleg@mypi`.
+- **Headless = no display for `show=True`.** With no monitor on the Pi, YOLO can't open a preview window. Use `save=True` (writes annotated frames to `runs/detect/`) and print labels instead. A monitor on the Pi, or streaming the feed, is needed for a live window.
+- **`Ctrl+C` during live detection prints a long traceback.** It's just the interrupt landing mid-inference — not a crash, expected behavior.
+- **The C270 reports 30 FPS input**, but YOLO processes at ~3.4 FPS. The camera isn't the bottleneck — the Pi's CPU is.
 
 ---
 
