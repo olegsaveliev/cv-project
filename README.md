@@ -151,6 +151,46 @@ flowchart TD
 | **requests** | Send the finished photo to Telegram over HTTPS | The **mail carrier** |
 | **Telegram Bot API** | Relay the message from the Pi to your phone | The **post office** |
 
+### Recording a short video clip, not just a snapshot
+
+The alerting can send a **short video** instead of a single photo. It starts the same way — camera → YOLO — but when it sees a person, it captures the next few seconds of annotated frames, stitches them into a clip, and sends that.
+
+```mermaid
+flowchart TD
+    LENS["📷 Camera lens<br/>continuous frames"]
+
+    subgraph pi["On the Raspberry Pi 5 — edge"]
+        INFER["Detect objects in each frame<br/><b>USES:</b> YOLO on PyTorch<br/><b>WHY:</b> find what is in view right now"]
+        GATE{"Person in view<br/>AND cooldown passed?"}
+        WAIT["Keep watching<br/><b>WHY:</b> no clip during the 60s cooldown"]
+        REC["Record the next 24 annotated frames<br/><b>USES:</b> YOLO plot, held in memory<br/><b>WHY:</b> ~7s of boxed video at real speed"]
+        WRITE["Stitch frames into a raw clip<br/><b>USES:</b> OpenCV VideoWriter<br/><b>WHY:</b> turns single frames into one video file"]
+        ENC["Re-encode the clip to H.264<br/><b>USES:</b> ffmpeg<br/><b>WHY:</b> so Telegram plays it inline, not as a file to download"]
+        COOL["Start a 60s cooldown<br/><b>WHY:</b> at most one clip a minute — no flood"]
+    end
+
+    subgraph off["Off-device"]
+        TG["Telegram Bot API<br/><b>USES:</b> sendVideo<br/><b>WHY:</b> relays the finished clip to your phone"]
+        PHONE["📲 Your phone<br/>a playable video arrives"]
+    end
+
+    LENS --> INFER --> GATE
+    GATE -->|no| WAIT --> INFER
+    GATE -->|yes| REC --> WRITE --> ENC --> TG --> PHONE
+    ENC --> COOL --> INFER
+
+    style pi fill:#E1F5EE,stroke:#0F6E56
+    style off fill:#FAECE7,stroke:#993C1D
+```
+
+**Reading it in one pass:**
+- **Detect + gate.** Every frame runs through YOLO, but a clip only *starts* if a person is in view **and** the cooldown has passed. Otherwise it just keeps watching.
+- **Record (OpenCV + YOLO).** It collects the next ~24 annotated frames — about 7 seconds at the Pi's ~3.4 FPS — holding them in memory.
+- **Stitch, then re-encode (OpenCV → ffmpeg).** OpenCV writes the frames into a video file; then **ffmpeg re-encodes it to H.264** so Telegram plays it inline instead of handing you a file to download. This two-tool hand-off is the one non-obvious part — OpenCV makes the video, ffmpeg makes it *play everywhere*.
+- **Send + cooldown.** The clip goes out via Telegram's `sendVideo`, then a 60-second cooldown stops a flood of clips before the next one can start.
+
+The clip plays back at the real capture rate, so 7 seconds in front of the camera becomes a true-to-life 7-second video — a little choppy at ~3.4 FPS, which is the honest edge-hardware result, not a bug.
+
 ### The stack, layer by layer
 
 | Layer | What it is | Where it runs |
