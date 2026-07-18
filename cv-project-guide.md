@@ -186,7 +186,7 @@ Once connected, `File → Open Folder → /home/yourusername/cv-project` (you'll
 ### Step 2.5.4 — Claude Code (optional but recommended)
 Install the **Claude Code** extension to have an AI assistant in the editor. It runs on your Mac and can read/edit the Pi's files through the Remote-SSH connection. It's ideal for explaining errors in plain English, writing/fixing the detection scripts, and walking through the fiddly IMX500 conversion in Part 8.
 
-> **Learning tip:** lean on it to *explain*, not just to *do*. Ask "why does this line exist?" and "what does this error mean?" — since your goal is hands-on learning, that's the difference between a repo you understand and one you can only copy. Hand it the `PROJECT-CONTEXT.md` file (see below) at the start of a session so it knows your setup and decisions without you re-explaining.
+> **Learning tip:** lean on it to *explain*, not just to *do*. Ask "why does this line exist?" and "what does this error mean?" — since your goal is hands-on learning, that's the difference between a repo you understand and one you can only copy. Hand it the `DESIGN.md` file (see below) at the start of a session so it knows your setup and decisions without you re-explaining.
 
 ### Step 2.5.5 — Finding the Pi & fixing first-boot problems (real triage)
 The most common snags are all at first connection. These are the exact commands to diagnose them — run them **on your Mac** unless noted. This is a genuinely useful reference; first-boot networking trips up almost everyone.
