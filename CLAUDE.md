@@ -16,6 +16,7 @@ A real-time computer vision **object detector** on a **Raspberry Pi 5**, later c
 2. **[BUILD-LOG.md](./BUILD-LOG.md)** — the *build log*. Progress against the plan, what's done, what's next, and a running log of decisions and engineering gotchas. **Update this file as we go** — it's the project's memory across sessions.
 3. **[cv-project-guide.md](./cv-project-guide.md)** — the *full build guide*: every step from shopping to first AI detection to phase-2 AI Camera, with all commands. The reference manual.
 4. **[README.md](./README.md)** — the *public GitHub README*: a polished, beginner-followable writeup of the whole journey. This is the deliverable others will read. Keep it accurate as the build evolves.
+5. **[PIPELINE.md](./PIPELINE.md)** — a *detailed pipeline explainer*: the frame's journey from lens to Telegram, the tool used at each step and why. A companion reference for understanding the stack.
 
 ## Folder structure & where these files live
 Everything lives in one project folder on the Pi: **`~/cv-project/`** (opened in VS Code over Remote-SSH). This same folder becomes the GitHub repo at publish time. Keep it organized like this, and create the sub-folders as each phase reaches them — don't make them all up front:
@@ -27,6 +28,7 @@ cv-project/
 ├── BUILD-LOG.md           # build log / status (keep updated)
 ├── cv-project-guide.md    # full build guide (reference)
 ├── README.md             # public GitHub writeup (keep in sync)
+├── PIPELINE.md           # lens-to-Telegram pipeline explainer
 ├── LICENSE               # MIT (added at publish time)
 ├── requirements.txt      # python deps — just: ultralytics
 ├── detect_live.py        # the live detection script (created in Step/Part on detection)
@@ -39,7 +41,7 @@ cv-project/
 ```
 
 **Rules for keeping it tidy:**
-- All five `.md` files sit at the **root** of `cv-project/`. Keep them there — the links between them are relative.
+- All six `.md` files sit at the **root** of `cv-project/`. Keep them there — the links between them are relative.
 - The `venv/` virtual environment also lives in this folder but must **not** be committed to GitHub — add it to `.gitignore` (along with `runs/`, large images, and `*.pt` if they get big).
 - Create `models/`, `docs/`, `data/` only when the phase that needs them arrives (training, demo recording, dataset). Note their purpose in `BUILD-LOG.md` when you do.
 - When you add a new file or folder that a beginner following the README should know about, reflect it in `README.md`'s structure section too.

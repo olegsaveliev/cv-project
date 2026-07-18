@@ -103,6 +103,8 @@ flowchart TD
 
 **Reading the diagram:** the solid path is the live loop that runs continuously on the Pi. The dotted line is the swap point — training happens once, off-device, and produces a `best.pt` file that drops in where `yolo11n.pt` sits. Nothing else in the pipeline changes.
 
+> 🔍 **Want the deep dive?** [`PIPELINE.md`](./PIPELINE.md) walks a single frame from the camera lens to the Telegram alert — every step, the tool it uses, and *why* each one exists.
+
 ### The stack, layer by layer
 
 | Layer | What it is | Where it runs |
