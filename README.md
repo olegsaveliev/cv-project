@@ -71,7 +71,7 @@ The device runs a pre-trained AI model called **YOLO** ("You Only Look Once"), w
 
 ```mermaid
 flowchart TD
-    subgraph device["On the Raspberry Pi 5 (edge)"]
+    subgraph device["On the Raspberry Pi 5 — edge"]
         CAM["Logitech C270 webcam<br/>USB · /dev/video0"]
         CV["OpenCV capture<br/>frames at 30 fps"]
         YOLO["Ultralytics YOLO<br/>yolo11n weights on PyTorch"]
@@ -85,7 +85,7 @@ flowchart TD
         PHONE["Your phone<br/>photo alert arrives"]
     end
 
-    subgraph training["Offline training path (one-time, per custom object)"]
+    subgraph training["Offline training path — one-time, per custom object"]
         PHOTOS["50-150 phone photos"]
         RF["Roboflow<br/>draw boxes, export YOLO format"]
         COLAB["Google Colab<br/>free GPU, train model"]

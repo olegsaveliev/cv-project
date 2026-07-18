@@ -130,6 +130,7 @@
 - **VS Code hijacks Git credential prompts.** `GIT_ASKPASS` points at a VS Code socket that fails over SSH → `ECONNREFUSED` and auth failure. Fix: `unset GIT_ASKPASS VSCODE_GIT_IPC_HANDLE` before pushing.
 - **Secrets discipline:** the bot token was pasted into chat twice during setup and should be revoked/regenerated via @BotFather. Keep tokens in `.env`, never in commands or committed files.
 - **Mermaid breaks on periods inside dotted-arrow labels.** `BEST -.replaces yolo11n.pt.-> YOLO` fails with "Lexical error" because `-.` and `.->` are structural syntax — the dots in the filename terminate the arrow early. Fix: use the pipe form `-.->|label text|` and avoid `.` `(` `)` `#` in labels.
+- **Mermaid breaks on parentheses inside `subgraph` titles — even when quoted.** `subgraph device["On the Raspberry Pi 5 (edge)"]` fails with a parse error because Mermaid tokenizes subgraph titles more strictly than node labels; the `(` terminates the token early. (Node labels like `CAM["...(...)..."]` are fine — different parser.) Fix: swap parens for em-dashes/commas → `subgraph device["On the Raspberry Pi 5 — edge"]`. Same family as the period-in-dotted-arrow gotcha above.
 - **GitHub caches rendered markdown.** After pushing a README fix, hard-refresh with `Cmd+Shift+R` or the old render persists.
 
 ---
