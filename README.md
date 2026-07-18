@@ -191,6 +191,42 @@ flowchart TD
 
 The clip plays back at the real capture rate, so 7 seconds in front of the camera becomes a true-to-life 7-second video — a little choppy at ~3.4 FPS, which is the honest edge-hardware result, not a bug.
 
+### Watching it live in a browser
+
+The Pi has no monitor, so there's no window to pop open. Instead it can serve the annotated feed as a **web page**: run one script and open `http://mypi.local:8000` on your laptop to watch the boxes draw in real time. The trick is that a single detection loop feeds **two outputs at once** — the live browser view *and* the Telegram alerts.
+
+```mermaid
+flowchart TD
+    LENS["📷 Camera lens<br/>continuous frames"]
+
+    subgraph pi["On the Raspberry Pi 5 — edge"]
+        INFER["Detection loop — background thread<br/><b>USES:</b> YOLO on PyTorch<br/><b>WHY:</b> draw boxes on every frame"]
+        SHARED["Latest annotated frame<br/><b>USES:</b> one shared variable in memory<br/><b>WHY:</b> a single frame feeds both outputs below"]
+        WEB["Web server<br/><b>USES:</b> Flask, MJPEG stream on port 8000<br/><b>WHY:</b> serves the live view to any browser"]
+        GATE["Confidence and cooldown gate<br/><b>WHY:</b> only strong, non-repeated hits raise an alert"]
+    end
+
+    subgraph off["Off-device"]
+        BROWSER["💻 Your laptop in a browser<br/>live boxes at mypi.local:8000"]
+        TG["Telegram Bot API<br/><b>USES:</b> sendPhoto"]
+        PHONE["📲 Your phone<br/>snapshot alert arrives"]
+    end
+
+    LENS --> INFER --> SHARED
+    SHARED --> WEB --> BROWSER
+    SHARED --> GATE --> TG --> PHONE
+
+    style pi fill:#E1F5EE,stroke:#0F6E56
+    style off fill:#FAECE7,stroke:#993C1D
+```
+
+**Reading it in one pass:**
+- **One detection loop.** YOLO runs continuously in a background thread and writes each annotated frame to a single shared variable in memory — the "latest frame."
+- **Two consumers of that frame.** A tiny **Flask** web server streams it to your browser (as MJPEG — literally a fast sequence of JPEGs), while the same frame goes through the **confidence + cooldown gate** to decide whether to fire a Telegram alert.
+- **Why a browser and not a pop-up window.** A headless Pi has no display, and a web stream needs nothing installed on your laptop — it works over Wi-Fi in any browser, and doubles as a neat live dashboard for the device.
+
+Same honest ~3.4 FPS as everything else — smooth enough to be useful, visibly choppy, as expected on edge hardware.
+
 ### The stack, layer by layer
 
 | Layer | What it is | Where it runs |

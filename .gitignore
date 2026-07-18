@@ -6,6 +6,7 @@ __pycache__/
 *.pt
 .env
 BUILD-LOG.md
+linkedin.md
 *.mp4
 *.avi
 videos/
