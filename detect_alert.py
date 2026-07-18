@@ -5,7 +5,7 @@ from ultralytics import YOLO
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 COOLDOWN = 60          # seconds between alerts for the same object
-CONFIDENCE = 0.5       # ignore weak detections
+CONFIDENCE = 0.7       # ignore weak detections
 
 model = YOLO("models/yolo11n.pt")
 last_alert = {}        # tracks when we last alerted per object type
