@@ -7,12 +7,12 @@
 ---
 
 ## Where we are right now
-- **Current phase:** ✅ **v1 base COMPLETE.** Webcam (Logitech C270) working, live detection running on the Pi — correctly detects "1 person" continuously at ~290ms/frame (**~3.4 FPS**).
-- **Next step:** Choose the custom object → collect 50–150 photos → label in Roboflow → train on Colab → deploy `best.pt`. Also: record demo GIF for the README.
-- **Camera status:** ✅ Arrived and confirmed working. `lsusb` shows `Logitech, Inc. Webcam C270`, device at `/dev/video0`.
+- **Current phase:** ✅ **v1 base + alerting COMPLETE**, README documented with architecture diagram and full stack breakdown. Live detection running, Telegram alerts working with cooldown, confidence tuned to 0.7.
+- **Next step:** Choose the custom object → collect 50–150 photos → label in Roboflow → train on Colab → deploy `best.pt`. Also pending: demo GIF, autostart (deferred).
+- **Camera status:** ✅ Logitech C270 working, `/dev/video0`.
 - **Key facts:** hostname `mypi` → `mypi.local` · username **`oleg`** · project at `/home/oleg/cv-project` · GitHub: https://github.com/olegsaveliev/cv-project · branch `main` · venv: `source ~/cv-project/venv/bin/activate`
-- **Measured baseline:** ~290–320ms inference on Pi 5 CPU ≈ **3–3.4 FPS** live. Honest README number.
-- **Headless note:** no monitor on the Pi, so `show=True` can't open a window. `detect_live.py` uses `save=True` + printed labels instead.
+- **Measured baseline:** ~290–320ms inference on Pi 5 CPU ≈ **3–3.4 FPS**. Real detections score 0.87–0.93; false positives ~0.59 (hence conf=0.7).
+- **Running the detector:** `set -a && source .env && set +a` then `python detect_alert.py`. Stops on terminal close — autostart not yet configured.
 - **Last updated:** (set this each session)
 
 ---
@@ -56,6 +56,22 @@
 - [x] ✅ Project structure created (`models/`, `docs/`, `data/`, `requirements.txt`, `.gitignore`)
 - [x] ✅ Git initialized, first commits made, pushed to GitHub (`main` branch)
 - [x] 📷 Live camera detection works (`detect_live.py`) — ~290ms/frame, detects "1 person" reliably
+
+### Phase 4b — Alerting (Telegram)
+- [x] ✅ Telegram bot created via @BotFather, chat ID obtained
+- [x] ✅ Credentials stored in `.env` (gitignored, not committed)
+- [x] ✅ `detect_alert.py` sends annotated snapshots on detection
+- [x] ✅ Per-object cooldown (60s) prevents spam at 3.4 FPS
+- [x] ✅ Confidence threshold tuned to 0.7 (cut "vase" false positive at 0.59)
+- [ ] ⏸️ Autostart on boot (systemd service) — deferred by choice
+
+### Phase 4c — Documentation
+- [x] ✅ README: architecture section with Mermaid flowchart (live loop + offline training path)
+- [x] ✅ README: stack table — every layer and where it runs
+- [x] ✅ README: Step 6b covering Telegram alerting, cooldown rationale, confidence tuning
+- [x] ✅ README: "why the Pi not the laptop" rationale
+- [ ] Demo GIF recorded and added to `docs/`
+- [ ] Personal "what I learned / tradeoffs" section filled in
 
 ### Phase 5 — Custom object (the showcase)
 - [ ] ✅ Custom object chosen: __________
@@ -107,13 +123,22 @@
 - **Headless = no display for `show=True`.** With no monitor on the Pi, YOLO can't open a preview window. Use `save=True` (writes annotated frames to `runs/detect/`) and print labels instead. A monitor on the Pi, or streaming the feed, is needed for a live window.
 - **`Ctrl+C` during live detection prints a long traceback.** It's just the interrupt landing mid-inference — not a crash, expected behavior.
 - **The C270 reports 30 FPS input**, but YOLO processes at ~3.4 FPS. The camera isn't the bottleneck — the Pi's CPU is.
+- **Telegram API URL needs the `bot` prefix glued to the token.** `api.telegram.org/bot<TOKEN>/getUpdates` works; omitting `bot` returns 404.
+- **`getUpdates` returns empty until you message the bot first.** A bot can't initiate a conversation — send it "hi" from Telegram, then the chat ID appears.
+- **Don't put a `$` before a literal token in a shell command.** `bot$8643...` makes bash expand `$8` as a variable → mangled token → 401. Use `$TELEGRAM_TOKEN` as a real variable, or paste the token with no `$`.
+- **Env vars don't persist across terminals.** Re-run `set -a && source .env && set +a` in each new shell, or the token is empty and the API returns 404.
+- **VS Code hijacks Git credential prompts.** `GIT_ASKPASS` points at a VS Code socket that fails over SSH → `ECONNREFUSED` and auth failure. Fix: `unset GIT_ASKPASS VSCODE_GIT_IPC_HANDLE` before pushing.
+- **Secrets discipline:** the bot token was pasted into chat twice during setup and should be revoked/regenerated via @BotFather. Keep tokens in `.env`, never in commands or committed files.
+- **Mermaid breaks on periods inside dotted-arrow labels.** `BEST -.replaces yolo11n.pt.-> YOLO` fails with "Lexical error" because `-.` and `.->` are structural syntax — the dots in the filename terminate the arrow early. Fix: use the pipe form `-.->|label text|` and avoid `.` `(` `)` `#` in labels.
+- **GitHub caches rendered markdown.** After pushing a README fix, hard-refresh with `Cmd+Shift+R` or the old render persists.
 
 ---
 
 ## Notes for the next session
 > Free-text scratchpad for "pick up here" reminders.
-- **Blocked only on the webcam now.** Everything camera-independent is done: OS, network, VS Code, YOLO, still-image detection, project structure, Git + GitHub.
-- **When the webcam arrives:** `sudo apt install -y fswebcam` → `fswebcam test.jpg` to confirm capture → create `detect_live.py` → `python detect_live.py` for live detection. Then record the demo GIF.
-- **Can do right now without hardware:** decide the custom object; create free Roboflow + Google Colab accounts; start taking the 50–150 phone photos.
-- **Remember:** activate the venv in every new terminal — `source ~/cv-project/venv/bin/activate` (prompt shows `(venv)`).
+- **v1 base + alerting is done.** Camera → YOLO → confidence filter → cooldown → Telegram photo alert, all running on the Pi.
+- **The one open decision: what custom object to detect.** Everything else in Phase 5 follows mechanically once chosen.
+- **Deferred by choice:** autostart via systemd. Currently run manually with `set -a && source .env && set +a && python detect_alert.py`. Use `nohup ... &` or `tmux` to survive disconnect.
+- **Still to do for a polished v1:** record the demo GIF (highest-impact README item), fill in the personal "what I learned" section.
 - **Docs sync:** the `.md` files are edited in chat and must be re-downloaded into `~/cv-project` on the Pi, then committed.
+- **Security todo:** revoke and regenerate the Telegram bot token (it was exposed in chat), update `.env`.

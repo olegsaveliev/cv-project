@@ -18,6 +18,7 @@ This device watches a camera feed and draws live labeled boxes around objects it
 - [Step 4 — Get the camera working](#step-4)
 - [Step 5 — Install the AI (YOLO)](#step-5)
 - [Step 6 — Run your first detection](#step-6)
+- [Step 6b — Get alerts on your phone (Telegram)](#step-6b)
 - [Step 7 — Train it on YOUR object](#step-7)
 - [What I learned / honest tradeoffs](#what-i-learned)
 - [Credits](#credits)
@@ -68,17 +69,60 @@ The device runs a pre-trained AI model called **YOLO** ("You Only Look Once"), w
 <a name="how-it-fits"></a>
 ## How the pieces fit together
 
-```
-[ Camera ]  →  sees the world, sends picture
-     │
-     ▼
-[ Raspberry Pi 5 ]  →  runs YOLO, finds objects, draws boxes
-     │
-     ▼
-[ Your laptop screen ]  →  you watch the live detection over the network
+```mermaid
+flowchart TD
+    subgraph device["On the Raspberry Pi 5 (edge)"]
+        CAM["Logitech C270 webcam<br/>USB · /dev/video0"]
+        CV["OpenCV capture<br/>frames at 30 fps"]
+        YOLO["Ultralytics YOLO<br/>yolo11n weights on PyTorch"]
+        CONF["Confidence filter<br/>keep score above 0.7"]
+        COOL["Cooldown gate<br/>max 1 alert per object per 60s"]
+        SAVE["Annotate frame<br/>draw boxes and labels"]
+    end
+
+    subgraph cloud["Off-device"]
+        TG["Telegram Bot API<br/>sendPhoto over HTTPS"]
+        PHONE["Your phone<br/>photo alert arrives"]
+    end
+
+    subgraph training["Offline training path (one-time, per custom object)"]
+        PHOTOS["50-150 phone photos"]
+        RF["Roboflow<br/>draw boxes, export YOLO format"]
+        COLAB["Google Colab<br/>free GPU, train model"]
+        BEST["Custom trained weights<br/>best checkpoint file"]
+    end
+
+    CAM --> CV --> YOLO --> CONF --> COOL --> SAVE --> TG --> PHONE
+    PHOTOS --> RF --> COLAB --> BEST
+    BEST -.->|swaps in for the default weights| YOLO
+
+    style device fill:#E1F5EE,stroke:#0F6E56
+    style cloud fill:#FAECE7,stroke:#993C1D
+    style training fill:#FAEEDA,stroke:#854F0B
 ```
 
-You do the setup **from your laptop**, controlling the Pi remotely. The Pi can sit in a corner with just power + camera plugged in. Your laptop is where you type; the commands actually run on the Pi.
+**Reading the diagram:** the solid path is the live loop that runs continuously on the Pi. The dotted line is the swap point — training happens once, off-device, and produces a `best.pt` file that drops in where `yolo11n.pt` sits. Nothing else in the pipeline changes.
+
+### The stack, layer by layer
+
+| Layer | What it is | Where it runs |
+|---|---|---|
+| **Hardware** | Raspberry Pi 5 (8GB), Logitech C270 webcam | On your desk |
+| **OS** | Raspberry Pi OS 64-bit (Debian-based Linux) | Pi |
+| **Capture** | OpenCV (`opencv-python`) — reads frames from `/dev/video0` | Pi |
+| **Model** | YOLO11n — nano variant, ~2.6M parameters, pre-trained on COCO (80 classes) | Pi |
+| **Framework** | PyTorch (`torch`) — runs the neural network's math | Pi (CPU only) |
+| **Library** | Ultralytics — the API wrapping model loading, inference, and annotation | Pi |
+| **Alerting** | `requests` → Telegram Bot API (`sendPhoto`) | Pi → internet |
+| **Labelling** | Roboflow — browser-based box drawing, exports YOLO format | Your laptop |
+| **Training** | Google Colab — free cloud GPU | Google's servers |
+
+### Why the split
+Everything time-sensitive runs **on the Pi**: the camera is physically attached, and inference has to happen where the frames are. Nothing leaves the device except the alert itself — the video stream never goes to a server, which is the privacy argument for edge AI.
+
+**Training is the deliberate exception.** It's vastly heavier than inference — the Pi would take days where a Colab GPU takes under an hour. So the model is trained in the cloud once, then the resulting file is copied to the Pi and runs locally forever after.
+
+You do the setup **from your laptop**, controlling the Pi remotely over SSH. The Pi can sit in a corner with just power + camera plugged in. Your laptop is where you type; the commands actually run on the Pi.
 
 ---
 
@@ -357,6 +401,102 @@ Real output from this build (a person sitting in front of the webcam):
 **This is the core of the project working.** 🎉 Press `Ctrl+C` to stop — it prints a long traceback, which is just the interrupt landing mid-inference, not a crash.
 
 > **Speed note — the honest number:** the camera delivers 30 FPS, but YOLO processes about **3.4 frames per second** (~290ms each) on a Pi 5 CPU. The camera isn't the bottleneck; the processor is. That's the real edge-hardware tradeoff, and it's worth stating plainly rather than hiding (more in [tradeoffs](#what-i-learned)).
+
+---
+
+<a name="step-6b"></a>
+## Step 6b — Get alerts on your phone (Telegram)
+
+Detection printing to a terminal isn't a product. This turns it into one: when the Pi sees something, it messages you the annotated photo.
+
+### Create the bot
+1. In Telegram, message **@BotFather** → send `/newbot`
+2. Give it a name and a username ending in `bot`
+3. BotFather replies with a **token** — keep it secret
+4. **Search for your new bot and send it a message** (required — the bot can't message you first)
+
+Get your chat ID:
+```bash
+curl -s "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates"
+```
+Look for `"chat":{"id":123456789` in the response.
+
+> **Two gotchas that cost time:** the URL is `.../bot<TOKEN>/...` with **no space and no slash** between `bot` and the token — omitting the `bot` prefix returns 404. And `getUpdates` returns an empty `result:[]` until you've actually sent the bot a message.
+
+### Store credentials outside the code
+Never hardcode tokens. Put them in a `.env` file and gitignore it:
+
+```bash
+cat > .env << 'EOF'
+TELEGRAM_TOKEN=your_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
+EOF
+
+echo ".env" >> .gitignore
+```
+
+### The alerting script
+
+`detect_alert.py` adds two pieces of logic on top of detection — a **confidence threshold** and a **per-object cooldown**:
+
+```python
+import os, time, requests
+from ultralytics import YOLO
+
+TOKEN = os.environ.get("TELEGRAM_TOKEN")
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+COOLDOWN = 60          # seconds between alerts for the same object
+CONFIDENCE = 0.7       # ignore weak detections
+
+model = YOLO("models/yolo11n.pt")
+last_alert = {}        # tracks when we last alerted per object type
+
+
+def send(text, image_path=None):
+    try:
+        if image_path:
+            url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
+            with open(image_path, "rb") as photo:
+                requests.post(url, data={"chat_id": CHAT_ID, "caption": text},
+                              files={"photo": photo}, timeout=10)
+        else:
+            url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+            requests.post(url, data={"chat_id": CHAT_ID, "text": text}, timeout=10)
+    except Exception as e:
+        print(f"Telegram error: {e}")
+
+
+send("Detector started")
+
+try:
+    for r in model.predict(source=0, stream=True, conf=CONFIDENCE, verbose=False):
+        now = time.time()
+        seen = {model.names[int(c)] for c in r.boxes.cls}
+
+        for label in seen:
+            if now - last_alert.get(label, 0) > COOLDOWN:
+                last_alert[label] = now
+                r.save("alert.jpg")            # annotated frame with boxes
+                send(f"Detected: {label}", "alert.jpg")
+                print(f"ALERT: {label}")
+except KeyboardInterrupt:
+    send("Detector stopped")
+```
+
+Run it:
+```bash
+pip install requests
+set -a && source .env && set +a      # load credentials into the shell
+python detect_alert.py
+```
+
+### Why the cooldown matters
+At ~3.4 FPS, alerting on every frame would send **200+ messages per minute** for a single stationary object. The `last_alert` dictionary tracks a timestamp per object type, so each label can only trigger once per `COOLDOWN` window. This is the difference between a notification system and a spam machine — and it's the kind of detail that separates a demo from something usable.
+
+### Tuning the confidence threshold
+Real detections in testing scored **0.87–0.93** (person, cell phone). A false positive — a poster read as a "vase" — scored **0.59**. Raising `CONFIDENCE` from 0.5 to 0.7 cut the noise without losing true detections. Your ideal threshold depends on your scene; start at 0.7 and adjust.
+
+> **Running it manually:** the script stops when you close the terminal. To keep it alive after disconnecting, use `nohup python detect_alert.py &` or run it inside `tmux`. For a permanent always-on setup, install it as a `systemd` service.
 
 ---
 
