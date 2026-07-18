@@ -1,0 +1,320 @@
+# 🥧 Raspberry Pi Object Detector
+
+**A real-time AI object detector that runs on a Raspberry Pi 5 — built from scratch by someone learning hands-on, and written so a complete beginner can rebuild it.**
+
+This device watches a camera feed and draws live labeled boxes around objects it recognizes ("person", "cup", "laptop"…), then is customized to detect one object of my own choosing. All the AI runs **on the device itself** ("edge AI") — no cloud, no internet round-trips — the same idea behind smart cameras like Ring and Nest.
+
+> _[← Replace this line with a demo GIF. A 5–10 second screen recording of the live detection is the single most important thing in this README. Record your screen while the detector runs, save it to `docs/demo.gif`, and embed it here.]_
+
+---
+
+## Table of contents
+- [What this is (and what "edge AI" means)](#what-this-is)
+- [What you need (bill of materials)](#what-you-need)
+- [How the pieces fit together](#how-it-fits)
+- [Step 1 — Flash the operating system](#step-1)
+- [Step 2 — First boot](#step-2)
+- [Step 3 — Connect from your laptop (VS Code)](#step-3)
+- [Step 4 — Get the camera working](#step-4)
+- [Step 5 — Install the AI (YOLO)](#step-5)
+- [Step 6 — Run your first detection](#step-6)
+- [Step 7 — Train it on YOUR object](#step-7)
+- [What I learned / honest tradeoffs](#what-i-learned)
+- [Credits](#credits)
+
+---
+
+<a name="what-this-is"></a>
+## What this is (and what "edge AI" means)
+
+The device runs a pre-trained AI model called **YOLO** ("You Only Look Once"), which is very good at spotting objects in an image and drawing boxes around them. Out of the box it already knows ~80 everyday objects. The interesting part of this project is the second half: **teaching it to recognize one new object it didn't know before**, using photos I took myself.
+
+**"Edge AI"** just means the AI runs *right where the data is created* — on this little computer on my desk — instead of sending video off to a server in the cloud. That's better for **privacy** (video never leaves the device), **speed** (no internet round-trip), and **cost** (no cloud bills). It's the same architecture as a smart doorbell camera.
+
+**Where does the "thinking" happen?** Detection has two jobs: *see* (capture the picture) and *think* (run the AI that finds objects). With a normal camera, the camera only sees and the **Raspberry Pi does all the thinking** — which works but is a bit slow, because the Pi is a small computer. (There's also an optional "AI Camera" that does the thinking on the camera sensor itself — see [tradeoffs](#what-i-learned).)
+
+---
+
+<a name="what-you-need"></a>
+## What you need (bill of materials)
+
+**Starting point: a complete beginner with a laptop and no hardware.** Here's everything from zero.
+
+### The core kit
+| Item | Notes |
+|---|---|
+| **Raspberry Pi 5** (4GB or 8GB) | The tiny computer that runs everything. 8GB is comfortable; 4GB works fine. *16GB is overkill — extra RAM does **not** speed up detection.* |
+| **Active cooling + case** | The Pi 5 runs hot and needs a fan. Easiest: the official case with built-in fan. |
+| **27W USB-C power supply** | The Pi 5 needs a strong 5V/5A supply — **not** a random phone charger. |
+| **microSD card (32GB+)** | This is the Pi's "hard drive." The operating system goes here. An A2-rated card is fast for OS use. |
+| **micro-HDMI-to-HDMI cable** | Only if you'll attach a monitor for setup. (Optional if you go "headless" — see Step 3.) |
+| **A camera** | Start with any **USB webcam** (e.g. Logitech C270) — plug-and-play, easiest. |
+
+> 💡 **Tip:** A "Raspberry Pi 5 Starter Kit" bundles the board, case, cooler, microSD, power supply, and HDMI cable together — usually simpler and cheaper than buying separately. Then you only add a camera.
+
+### You probably already own
+- A **laptop** (used to flash the microSD card and, later, to control the Pi). This project was built from a MacBook Air.
+- A **USB-C microSD card reader** — needed if your laptop has no SD slot (e.g. a MacBook Air).
+- **Wi-Fi** — the Pi has it built in; have your network name + password ready.
+- *(Optional)* a monitor + USB keyboard/mouse — only if you don't do the "headless" route in Step 3.
+
+### The camera choice, briefly
+- **USB webcam** — easiest, recommended for your first build. Works instantly.
+- **Raspberry Pi Camera Module 3** — official ribbon-cable camera, nicer image. (On a Pi 5, make sure you have the Pi 5-compatible camera cable.)
+- **Raspberry Pi AI Camera (Sony IMX500)** — advanced: runs the AI on the camera sensor itself for much faster detection. More setup for custom models. A great *phase-2* upgrade, covered at the end.
+
+---
+
+<a name="how-it-fits"></a>
+## How the pieces fit together
+
+```
+[ Camera ]  →  sees the world, sends picture
+     │
+     ▼
+[ Raspberry Pi 5 ]  →  runs YOLO, finds objects, draws boxes
+     │
+     ▼
+[ Your laptop screen ]  →  you watch the live detection over the network
+```
+
+You do the setup **from your laptop**, controlling the Pi remotely. The Pi can sit in a corner with just power + camera plugged in. Your laptop is where you type; the commands actually run on the Pi.
+
+---
+
+<a name="step-1"></a>
+## Step 1 — Flash the operating system
+
+The Pi needs an operating system (like Windows or macOS, but for the Pi) written onto the microSD card before it can do anything.
+
+1. On your laptop, install **Raspberry Pi Imager** from [raspberrypi.com/software](https://www.raspberrypi.com/software/). Install it like any app.
+2. Put the microSD card into your laptop (use a USB-C card reader if your laptop has no SD slot).
+3. Open Raspberry Pi Imager and choose, in order:
+   - **Choose Device** → **Raspberry Pi 5**
+   - **Choose OS** → **Raspberry Pi OS (64-bit)** (the recommended one at the top)
+   - **Choose Storage** → your microSD card *(double-check you pick the card, not another drive!)*
+4. Click **Next**, then **Edit Settings** when asked. **This step is what lets you control the Pi from your laptop without a monitor — don't skip it.** Set:
+   - **Hostname** — a name for the Pi, e.g. `mypi`
+   - **Username + password** — *write these down*, you'll need them to connect
+   - **Wi-Fi name + password** — so the Pi joins your network automatically on first boot
+   - **Locale / timezone**
+   - Under the **Services** tab → **enable SSH** → "use password authentication" (SSH is how your laptop talks to the Pi)
+5. Click **Save**, then **Write**. It erases the card and writes the OS. Takes a few minutes.
+6. When done, eject the card and put it into the Pi's microSD slot (on the underside of the board).
+
+> **Why set Wi-Fi + SSH now?** So the moment the Pi powers on, it joins your network and your laptop can reach it — no monitor or keyboard needed.
+
+---
+
+<a name="step-2"></a>
+## Step 2 — First boot
+
+1. Insert the flashed microSD card into the Pi. Plug in the camera. Plug in power last.
+2. Wait about a minute for it to boot and join Wi-Fi.
+3. Update its software. (You'll run this in the next step, once connected — or on an attached monitor's terminal if you have one.)
+
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo reboot
+```
+
+> When you type a password in the terminal, **nothing appears as you type** — no dots, no stars. That's normal Linux behavior, not a frozen screen. Just type it and press Enter.
+
+---
+
+<a name="step-3"></a>
+## Step 3 — Connect from your laptop (VS Code)
+
+Instead of hunching over a tiny screen on the Pi, you'll control it from **VS Code on your laptop**. This is the standard, comfortable way to work with a Pi.
+
+1. Install **VS Code** on your laptop from [code.visualstudio.com](https://code.visualstudio.com/).
+2. In VS Code, open the **Extensions** panel and install **Remote - SSH** (by Microsoft).
+3. Find the Pi's network address. If you have a monitor on the Pi, run `hostname -I`. Otherwise try connecting by the hostname you set (e.g. `mypi.local`).
+4. In VS Code press `Cmd/Ctrl+Shift+P`, type **"Remote-SSH: Connect to Host"**, choose **Add New SSH Host**, and enter:
+   ```
+   ssh yourusername@mypi.local
+   ```
+   (use your username and hostname/IP from Step 1)
+5. Connect and enter the Pi's password. VS Code opens a window that *is* the Pi — its files and its terminal, shown on your laptop.
+
+Open a terminal inside VS Code (`` Ctrl+` ``). **Every command from here runs on the Pi.** Now run the update from Step 2 if you haven't:
+
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo reboot
+```
+
+**What this does:** `apt` is Linux's package manager (like an app store for system software). `apt update` refreshes the catalog of what's available; `apt full-upgrade` actually installs the newer versions. `sudo` means "run as administrator" — system changes need it, which is why it asks for your password. The `-y` just auto-answers "yes" to prompts so it runs unattended. Always worth doing on a fresh install: you get the latest security patches and avoid version mismatches later.
+
+Then create the project folder that everything will live in:
+
+```bash
+mkdir -p ~/cv-project
+cd ~/cv-project
+pwd     # should print /home/yourname/cv-project
+```
+
+`mkdir -p` creates the folder (the `-p` means "don't complain if it already exists"), `cd` moves you into it, and `pwd` ("print working directory") confirms where you are. Then in VS Code: **File → Open Folder… → `/home/yourname/cv-project`** so the editor is rooted in your project.
+
+> **This whole project was built this way** — laptop for typing, Pi for running. It's called a "headless" setup (no monitor/keyboard on the Pi).
+
+### 🛠️ Troubleshooting first connection (the part that trips everyone up)
+Getting the Pi onto the network and logging in the first time is where most beginners get stuck. Run these **on your laptop** unless noted:
+
+- **`ping mypi.local` says "cannot resolve":** the Pi may still be booting (wait 3–5 minutes), or `.local` isn't resolving on your network. Find it by IP instead: `ping -c 1 192.168.X.255` (your broadcast address) then `arp -a` to list devices, and look for an unfamiliar `192.168.X.x`.
+- **A candidate IP might be your own laptop.** A machine pinging itself replies in ~0.7ms. Confirm with `ipconfig getifaddr en0` (macOS) — if it matches your candidate, that's your laptop, keep looking.
+- **Best way to find the Pi:** your router's app/admin page lists connected devices by name — look for `mypi` or `raspberrypi` and read its IP.
+- **`Permission denied` / wrong username:** the username is whatever you set in the Imager, not your laptop's username. If unsure, put the card back in your laptop and run `cat /Volumes/bootfs/user-data` to see the real username (and `cat /Volumes/bootfs/network-config` to verify the Wi-Fi name + country code).
+- **Pi never appears on the network at all:** the Wi-Fi credentials or country code probably didn't save. Re-flash with the Imager, double-checking the network name (exact), password, and country.
+- **Locale warnings on login** (`LC_CTYPE: cannot change locale`): harmless. To clear them, run on the Pi: `sudo sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && sudo locale-gen && sudo update-locale LANG=en_US.UTF-8`, then log out and back in.
+
+---
+
+<a name="step-4"></a>
+## Step 4 — Get the camera working
+
+Confirm the camera works *before* adding AI, so you know your hardware is good.
+
+**USB webcam:**
+```bash
+sudo apt install -y fswebcam
+fswebcam test.jpg
+```
+Open `test.jpg` (in VS Code's file explorer). If you see a picture, the camera works.
+
+**Raspberry Pi ribbon camera:**
+```bash
+rpicam-hello --timeout 5000
+```
+A preview should appear for 5 seconds. If not, re-seat the ribbon cable (correct orientation) and make sure it clicked in.
+
+---
+
+<a name="step-5"></a>
+## Step 5 — Install the AI (YOLO)
+
+### First, what are we actually installing?
+
+**YOLO ("You Only Look Once")** is an object-detection model. Older approaches scanned an image many times over, checking region after region for objects — slow. YOLO looks at the whole image **once** and predicts all the boxes and labels in a single pass. That's where the name comes from, and it's why YOLO is fast enough to run on live video on a small computer like a Pi.
+
+**Ultralytics** is the company/open-source project that maintains the modern YOLO versions and publishes them as an easy-to-use Python library. So:
+- *YOLO* = the AI model (the "brain" that recognizes objects)
+- *Ultralytics* = the software package that lets you download and run that brain in a couple of lines of Python
+
+We use the **`yolo11n`** model — the "n" stands for **nano**, the smallest and fastest version. There are bigger ones (s/m/l/x) that are more accurate but too slow for a Pi. Nano is the right trade for edge hardware.
+
+The model comes **pre-trained on the COCO dataset**, meaning it already recognizes about **80 everyday object types** (person, cup, laptop, dog, car, chair…) without any training from you. That's your starting point — later, in Step 7, you teach it one *new* object of your own.
+
+### The commands, and what each one does
+
+```bash
+# 1. Make a project folder and enter it
+mkdir ~/cv-project && cd ~/cv-project
+```
+`mkdir` = "make directory." The `~` means your home folder, so this creates `/home/yourname/cv-project`. `cd` = "change directory" — it moves you into that folder so everything after happens in the right place. The `&&` just chains the two commands together.
+
+```bash
+# 2. Create an isolated Python environment
+python3 -m venv venv
+```
+This creates a **virtual environment** — a private, self-contained copy of Python that lives inside your project folder. Why bother? Because AI libraries pull in dozens of dependencies at specific versions. Installing them system-wide can break other software on the Pi (Raspberry Pi OS uses Python for its own tools). A `venv` keeps this project's packages in a sealed box: nothing leaks out, nothing conflicts, and if it ever gets messy you can delete the folder and start fresh. It's standard practice for every Python project, not just this one.
+
+```bash
+# 3. Activate it
+source venv/bin/activate
+```
+Creating the box isn't enough — you have to *step into* it. `source` runs a small script that points your terminal at the project's private Python instead of the system one. **You'll know it worked because your prompt changes to start with `(venv)`.** If you open a new terminal later, you must run this again — the activation only lasts for that terminal session.
+
+```bash
+# 4. Install YOLO
+pip install ultralytics
+```
+`pip` is Python's package installer. This downloads the Ultralytics library **and all its dependencies** — including PyTorch (the underlying deep-learning framework that actually runs the neural network), OpenCV (image/video handling), and NumPy (fast math on arrays). That's why it takes several minutes on a Pi and prints a wall of scrolling text: it's fetching and building a lot of machinery, not just one file.
+
+> **Common snag:** if you get an "externally-managed-environment" error, it means the `venv` isn't active — check for `(venv)` in your prompt and re-run `source venv/bin/activate`.
+
+> **Coming back later?** Re-activate with `source ~/cv-project/venv/bin/activate` before running anything.
+
+When it finishes, you have a working object detector on your Pi — you just haven't pointed it at anything yet. That's Step 6.
+
+---
+
+<a name="step-6"></a>
+## Step 6 — Run your first detection
+
+**On a single picture first:**
+```bash
+yolo predict model=yolo11n.pt source=test.jpg
+```
+The first run downloads the model automatically. It saves a copy of your image with boxes + labels drawn on it into a `runs/detect/` folder. Open it — that's object detection working!
+
+**Now live, on the camera.** Create a file called `detect_live.py` with this content:
+
+```python
+from ultralytics import YOLO
+
+model = YOLO("yolo11n.pt")   # the small, Pi-friendly model
+
+# source=0 = the first camera (USB webcam or Pi camera)
+# show=True = open a window with live boxes
+for _ in model.predict(source=0, show=True, stream=True):
+    pass
+```
+
+Run it:
+```bash
+python detect_live.py
+```
+
+A window opens with your live camera feed and labeled boxes. Wave a cup or your phone in front of it. **This is the core of the project working.** 🎉
+
+> **Speed note:** on a Pi 5 with a normal webcam, this runs at a modest frame rate. That's expected — the small computer is doing all the AI work. It's a real engineering tradeoff, not a bug (more in [tradeoffs](#what-i-learned)).
+
+---
+
+<a name="step-7"></a>
+## Step 7 — Train it on YOUR object
+
+This is what makes the project *yours* — teaching the model one thing it didn't know. Good targets are distinct-looking objects you can photograph easily and that tell a small story.
+
+1. **Collect images** — 50–150 photos of your object from varied angles, lighting, and backgrounds. Your phone is fine.
+2. **Label them** — draw a box around your object in each photo using **[Roboflow](https://roboflow.com)** (free, browser-based, beginner-friendly). Export in **YOLO format**.
+3. **Train** — training is heavy, so do it in the cloud on **[Google Colab](https://colab.research.google.com)** (free GPUs), not on the Pi. Roboflow provides ready-made Colab notebooks where you mostly press "Run." You end up with a trained model file called `best.pt`.
+4. **Deploy** — copy `best.pt` onto the Pi (into `~/cv-project`), then change **one line** in `detect_live.py`:
+
+```python
+model = YOLO("best.pt")   # your custom model instead of yolo11n.pt
+```
+
+Run it again — now it detects your object. Everything else stays the same.
+
+> **Don't over-engineer v1.** A model trained on ~60 phone photos that detects one object at ~80% accuracy is a completely legitimate result. Ship it, then improve. "Working and honest" beats "ambitious and unfinished."
+
+---
+
+<a name="what-i-learned"></a>
+## What I learned / honest tradeoffs
+
+_[This section is where you write, in your own words, what surprised you and what you'd do differently. It's the part recruiters and other engineers read most closely — honesty reads as maturity. Some prompts to fill in:]_
+
+- **Frame rate is a real constraint.** A Pi 5 doing all the AI work on a normal camera runs at a modest frame rate. That's the nature of edge hardware, and naming it honestly matters more than hiding it.
+- **Training belongs in the cloud.** The Pi is great at *running* a model but too slow to *train* one — so labeling happened in Roboflow and training on Google Colab's free GPUs.
+- **A small honest dataset works.** _[Fill in: how many photos you used, what accuracy you got, what confused the model.]_
+- **What I'd improve next.** _[Fill in: more varied photos? a bigger model? an alert when the object appears?]_
+
+### Optional phase 2: the AI Camera (much faster)
+There's a **Raspberry Pi AI Camera (Sony IMX500)** that runs the neural network *on the camera sensor itself*, freeing the Pi's processor and making detection fast and smooth. Out-of-the-box detection is easy; using a **custom** model requires an extra step — exporting the model to the sensor's special IMX500 format and compiling it into a `.rpk` file with Sony's toolchain. It's the fiddliest part of the whole project, but documenting it clearly is genuinely useful to other developers. _[If you did phase 2, write up the conversion steps and any gotchas here.]_
+
+References: [Ultralytics IMX500 guide](https://docs.ultralytics.com/integrations/sony-imx500/) · [Raspberry Pi AI Camera docs](https://www.raspberrypi.com/documentation/accessories/ai-camera.html)
+
+---
+
+<a name="credits"></a>
+## Credits
+- **[Ultralytics YOLO](https://docs.ultralytics.com)** — the object detection model and library.
+- **[Roboflow](https://roboflow.com)** — image labeling and dataset export.
+- **[Google Colab](https://colab.research.google.com)** — free cloud GPUs for training.
+- **[Raspberry Pi](https://www.raspberrypi.com/documentation)** — hardware and OS.
+
+## License
+Released under the **MIT License** — feel free to learn from and reuse this. _[Add a `LICENSE` file; GitHub offers MIT in one click when creating a repo.]_
