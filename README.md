@@ -103,7 +103,53 @@ flowchart TD
 
 **Reading the diagram:** the solid path is the live loop that runs continuously on the Pi. The dotted line is the swap point — training happens once, off-device, and produces a `best.pt` file that drops in where `yolo11n.pt` sits. Nothing else in the pipeline changes.
 
-> 🔍 **Want the deep dive?** [`PIPELINE.md`](./PIPELINE.md) walks a single frame from the camera lens to the Telegram alert — every step, the tool it uses, and *why* each one exists.
+### A frame's journey — lens to phone, step by step
+
+The diagram above is the shape; here's the detail. The idea underneath it all: **to a computer, an image is just a grid of numbers** — a 640×480 frame is roughly 920,000 of them. Every step below creates, reshapes, crunches, or ships that grid.
+
+```mermaid
+flowchart TD
+    LENS["📷 Camera lens — Logitech C270<br/><b>WHY:</b> the eye — turns light into a raw digital frame"]
+
+    subgraph pi["On the Raspberry Pi 5 — edge"]
+        CAP["1 · Grab the frame<br/><b>USES:</b> OpenCV, via /dev/video0<br/><b>WHY:</b> pulls each frame off the webcam into the program"]
+        ARR["2 · Frame becomes numbers<br/><b>USES:</b> NumPy array<br/><b>WHY:</b> an image is just a grid of numbers the rest can crunch"]
+        PREP["3 · Resize and format<br/><b>USES:</b> OpenCV<br/><b>WHY:</b> YOLO expects a fixed 640px input, not the raw camera size"]
+        INFER["4 · Detect objects<br/><b>USES:</b> YOLO running on PyTorch, CPU<br/><b>WHY:</b> the brain — finds what is in the frame and where"]
+        CONF["5 · Confidence filter<br/><b>USES:</b> threshold set to 0.7<br/><b>WHY:</b> drop weak guesses so false alarms don't get through"]
+        COOL["6 · Cooldown gate<br/><b>USES:</b> one timestamp per object, 60s window<br/><b>WHY:</b> at ~3-4 FPS, stops 200+ alerts a minute for one object"]
+        DRAW["7 · Annotate and save<br/><b>USES:</b> YOLO's save, OpenCV underneath<br/><b>WHY:</b> draws the boxes and writes the alert image to send"]
+        SEND["8 · Send the alert<br/><b>USES:</b> the requests library<br/><b>WHY:</b> pushes the photo out over HTTPS"]
+    end
+
+    subgraph off["Off-device"]
+        TG["Telegram Bot API — sendPhoto<br/><b>WHY:</b> Telegram's servers relay the message to you"]
+        PHONE["📲 Your phone<br/><b>WHY:</b> the annotated photo alert arrives"]
+    end
+
+    LENS --> CAP --> ARR --> PREP --> INFER --> CONF --> COOL --> DRAW --> SEND --> TG --> PHONE
+
+    style pi fill:#E1F5EE,stroke:#0F6E56
+    style off fill:#FAECE7,stroke:#993C1D
+```
+
+**Reading it in one pass:**
+- **Steps 1–3 — get the picture in (OpenCV + NumPy).** Eyes and prep work: pull the frame off the camera and reshape it into what the model expects.
+- **Step 4 — the thinking (YOLO on PyTorch).** The only true "AI" step. Everything before it feeds the model; everything after acts on the model's answer.
+- **Steps 5–6 — the product decisions (no library).** Not a tool — these are choices about how the device should *behave*. The confidence filter kills false alarms; the cooldown stops spam. This is the difference between a demo and something usable.
+- **Steps 7–8 — draw and ship (OpenCV + requests).** Mark up the frame and push it out.
+- **Off-device.** Telegram's servers do the final hop to your phone — the *only* part that ever leaves the device. The video itself never does, which is the privacy argument for edge AI.
+
+**The tools under the hood** — none installed by hand; `pip install ultralytics` pulled them all in, because YOLO can't run without them:
+
+| Tool | Its job | Plain-English analogy |
+|---|---|---|
+| **OpenCV** | Capture frames, resize them, draw boxes, save the annotated image | The **camera + darkroom** — gets the shot, then develops and marks it up |
+| **NumPy** | Hold and do fast math on the grid of numbers that *is* the image | The **shared language of numbers** every other tool speaks |
+| **PyTorch** | Run the millions of math operations inside the neural network | The **electricity and muscles** that make the brain run |
+| **YOLO (Ultralytics)** | The model that decides what is in the frame and where | The **brain** doing the recognizing |
+| **requests** | Send the finished photo to Telegram over HTTPS | The **mail carrier** |
+| **Telegram Bot API** | Relay the message from the Pi to your phone | The **post office** |
 
 ### The stack, layer by layer
 
