@@ -25,11 +25,18 @@ cv-project/
 ├── CLAUDE.md              # this file — entry point for AI sessions
 ├── DESIGN.md              # design decisions & rationale
 ├── BUILD-LOG.md           # build log / status (keep updated) — LOCAL ONLY, gitignored
+├── SHUTDOWN.md            # ops runbook: shutdown + service mgmt — LOCAL ONLY, gitignored
+├── linkedin.md            # LinkedIn drafts — LOCAL ONLY, gitignored
 ├── cv-project-guide.md    # full build guide (reference)
 ├── README.md             # public GitHub writeup (keep in sync)
 ├── LICENSE               # MIT (added at publish time)
-├── requirements.txt      # python deps — just: ultralytics
-├── detect_live.py        # the live detection script (created in Step/Part on detection)
+├── requirements.txt      # python deps: ultralytics, requests, flask
+├── detect_live.py        # minimal live detection (first version)
+├── detect_alert.py       # photo alerts to Telegram on detection
+├── detect_clip.py        # short video-clip alerts (OpenCV + ffmpeg H.264)
+├── detect_stream.py      # live browser view (Flask MJPEG) + alerts
+├── telegram_control.py   # remote control via Telegram (/start /stop /stream ...)
+├── videos/               # recorded clips (raw + final) — gitignored
 ├── models/               # trained model files
 │   └── best.pt           # custom model (after training) — don't commit huge files casually
 ├── docs/                 # things for the README
@@ -39,7 +46,8 @@ cv-project/
 ```
 
 **Rules for keeping it tidy:**
-- All five `.md` files sit at the **root** of `cv-project/`. Keep them there — the links between them are relative. (`BUILD-LOG.md` lives here too but is gitignored — kept as a local working log, not published.)
+- The core `.md` docs sit at the **root** of `cv-project/`. Keep them there — the links between them are relative. **Published:** `CLAUDE.md`, `DESIGN.md`, `README.md`, `cv-project-guide.md`. **Local-only (gitignored working notes):** `BUILD-LOG.md`, `SHUTDOWN.md`, `linkedin.md`.
+- The **systemd service** (`cv-detector.service`) lives in `/etc/systemd/system/` — outside the repo. Its contents are documented in `README.md` (Step 6c) so it's reproducible without committing machine-specific paths.
 - The `venv/` virtual environment also lives in this folder but must **not** be committed to GitHub — add it to `.gitignore` (along with `runs/`, large images, and `*.pt` if they get big).
 - Create `models/`, `docs/`, `data/` only when the phase that needs them arrives (training, demo recording, dataset). Note their purpose in `BUILD-LOG.md` when you do.
 - When you add a new file or folder that a beginner following the README should know about, reflect it in `README.md`'s structure section too.

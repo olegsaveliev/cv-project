@@ -50,6 +50,12 @@ The RTC battery was skipped — not needed for this application.
 3. **v2 (optional)** — port to the AI Camera (IMX500): export the model to IMX format and package it into a `.rpk` to run on-sensor. This is the most involved part; documenting the conversion clearly is high-value to other developers.
    - References: [Ultralytics IMX500 guide](https://docs.ultralytics.com/integrations/sony-imx500/) · [Raspberry Pi AI Camera docs](https://www.raspberrypi.com/documentation/accessories/ai-camera.html)
 
+## Deployment & operations
+
+- **Runs as a systemd service** (`cv-detector.service`) so the controller starts on boot, restarts on failure, and survives reboots — the always-on behaviour expected of an edge device. Secrets load from a gitignored `.env` via `EnvironmentFile`, and the service runs as the normal user (with the `video` group) rather than root.
+- **Remote control via Telegram, secure by design.** A controller script long-polls the Telegram Bot API for commands (`/start`, `/stop`, `/stream`, …). Because the Pi only makes *outbound* calls, nothing is exposed to the internet — no port forwarding, no inbound holes — and commands are accepted only from the owner's chat ID.
+- **Graceful shutdown protects the SD card.** The Pi is always powered down with `sudo shutdown` (never by pulling power); systemd stops the service cleanly as part of the sequence.
+
 ## Publishing goals
 
 - A strong README with a demo GIF/video (highest-impact asset), a bill of materials, reproducible setup steps, and an honest "what I learned / tradeoffs" section.

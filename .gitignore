@@ -7,6 +7,8 @@ __pycache__/
 .env
 BUILD-LOG.md
 linkedin.md
+SHUTDOWN.md
 *.mp4
 *.avi
+*.log
 videos/

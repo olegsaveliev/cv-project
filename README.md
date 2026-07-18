@@ -19,6 +19,7 @@ This device watches a camera feed and draws live labeled boxes around objects it
 - [Step 5 — Install the AI (YOLO)](#step-5)
 - [Step 6 — Run your first detection](#step-6)
 - [Step 6b — Get alerts on your phone (Telegram)](#step-6b)
+- [Step 6c — Control it from your phone, and run it 24/7](#step-6c)
 - [Step 7 — Train it on YOUR object](#step-7)
 - [What I learned / honest tradeoffs](#what-i-learned)
 - [Credits](#credits)
@@ -621,6 +622,90 @@ At ~3.4 FPS, alerting on every frame would send **200+ messages per minute** for
 Real detections in testing scored **0.87–0.93** (person, cell phone). A false positive — a poster read as a "vase" — scored **0.59**. Raising `CONFIDENCE` from 0.5 to 0.7 cut the noise without losing true detections. Your ideal threshold depends on your scene; start at 0.7 and adjust.
 
 > **Running it manually:** the script stops when you close the terminal. To keep it alive after disconnecting, use `nohup python detect_alert.py &` or run it inside `tmux`. For a permanent always-on setup, install it as a `systemd` service.
+
+---
+
+<a name="step-6c"></a>
+## Step 6c — Control it from your phone, and run it 24/7
+
+Two upgrades turn this from "a script you run at your desk" into "a device you own": **remote control** and **always-on autostart**.
+
+### Control it with Telegram commands
+A small controller script (`telegram_control.py`) listens for commands and starts/stops the detectors for you:
+
+| Command | Action |
+|---|---|
+| `/start` | Photo alerts |
+| `/clip` | Video-clip alerts |
+| `/stream` | Live browser view + alerts |
+| `/stop` | Stop the camera |
+| `/status` | Running or idle? |
+| `/help` | List commands |
+
+The clever part is **how it reaches your Pi from anywhere without exposing it to the internet.** Your Pi sits behind your home router — normally unreachable from outside. Instead of opening a risky hole in your router, the controller just keeps *asking* Telegram's servers "any commands for me?" — an **outbound** call your router always allows. So you can be anywhere in the world, text your bot, and the Pi obeys — with nothing exposed and no ports forwarded. It also **only obeys your own chat ID**, so a stranger who finds the bot can't control your camera.
+
+```mermaid
+flowchart TD
+    PHONE["📱 Your phone — anywhere in the world<br/>text /start · /stream · /stop · /status"]
+
+    subgraph cloud["Telegram cloud"]
+        TG["Telegram servers<br/>hold your message until asked"]
+    end
+
+    subgraph pi["On the Raspberry Pi 5 — always on via systemd"]
+        CTRL["Controller — telegram_control.py<br/><b>USES:</b> long-poll getUpdates, outbound only<br/><b>WHY:</b> nothing is exposed to the internet"]
+        AUTH["Is it from your chat ID?<br/><b>WHY:</b> ignore commands from anyone else"]
+        DET["Start or stop a detector<br/><b>runs:</b> detect_alert / detect_clip / detect_stream"]
+    end
+
+    PHONE --> TG
+    CTRL -->|asks for commands| TG
+    TG -->|delivers your command| CTRL
+    CTRL --> AUTH --> DET
+
+    style pi fill:#E1F5EE,stroke:#0F6E56
+    style cloud fill:#FAECE7,stroke:#993C1D
+```
+
+### Run it 24/7 with a systemd service
+So the controller starts automatically on boot (and restarts itself if it ever crashes), install it as a **systemd service**. Create `/etc/systemd/system/cv-detector.service`:
+
+```ini
+[Unit]
+Description=CV edge object detector — Telegram remote controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=oleg
+Group=oleg
+SupplementaryGroups=video
+WorkingDirectory=/home/oleg/cv-project
+EnvironmentFile=/home/oleg/cv-project/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/oleg/cv-project/venv/bin/python /home/oleg/cv-project/telegram_control.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then enable and start it:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now cv-detector.service
+sudo systemctl status cv-detector.service      # confirm "active (running)"
+sudo journalctl -u cv-detector.service -f       # watch its logs
+```
+
+A few things worth knowing:
+- **`EnvironmentFile`** loads your secrets from `.env` — no tokens in the service file (which is safe to share); the actual `.env` stays private and gitignored.
+- **`User=oleg` + `SupplementaryGroups=video`** run it as you, with camera access — not as root.
+- **After a reboot it comes back *idle but listening*** — detection starts only when you text a start command. A safe default.
+
+> **Powering it down safely:** never yank the plug on a running Pi (you can corrupt the SD card). Run `sudo shutdown -h now`, wait for the activity LED to stop blinking, *then* unplug. `systemd` stops the service cleanly as part of shutdown. To bring it back, just plug power in — it boots and starts listening on its own.
 
 ---
 
