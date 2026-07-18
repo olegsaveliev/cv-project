@@ -237,16 +237,78 @@ pip install ultralytics
 
 When it finishes, you have a working object detector on your Pi — you just haven't pointed it at anything yet. That's Step 6.
 
+### Why install on the Pi and not your laptop?
+Reasonable question — YOLO runs fine on a laptop, and faster. But the Pi *is* the product:
+- **The camera plugs into the Pi**, so live detection has to run where the camera is.
+- **It's standalone.** Unplug your laptop and the Pi keeps detecting — that's what makes it a device rather than a script, the same way a doorbell camera doesn't need your laptop nearby.
+- **The constraint is the story.** Running on limited hardware forces real tradeoffs (nano model, modest frame rate). On a laptop there's no constraint and nothing interesting to report.
+
+Mental model: **laptop = workbench** (editing, reading, driving the session), **Pi = product** (Python, YOLO, camera, model, running detector). Everything you type in the VS Code terminal runs on the Pi.
+
+One deliberate exception: **training** the custom model (Step 7) happens off the Pi on Google Colab's free GPUs, because training is vastly heavier than running. Train in the cloud, copy the finished model down, run it on the device.
+
+### Version control (set up Git now, publish later)
+Two different things people conflate: **Git** is local history on the Pi (works offline); **GitHub** is where you publish it. Start Git early so your commit history tells the story of the build instead of one giant "finished project" commit.
+
+```bash
+git init
+git config --global user.name "Your Name"
+git config --global user.email "your@email.com"
+```
+
+Create a `.gitignore` **before** your first commit — this matters, because `venv/` is hundreds of megabytes and must never be committed:
+
+```bash
+printf 'venv/\nruns/\n__pycache__/\n*.jpg\n*.png\n*.pt\n' > .gitignore
+```
+
+What each line excludes: `venv/` the environment, `runs/` YOLO's auto-generated output folders, `__pycache__/` Python bytecode, images and `*.pt` model weights (downloadable, not your work).
+
+```bash
+git add .
+git commit -m "Setup complete: YOLO running, first detection on still image"
+```
+
+Then connect to GitHub and push:
+
+```bash
+git branch -M main     # GitHub expects "main"; git init may default to "master"
+git remote add origin https://github.com/YOURNAME/YOURREPO.git
+git push -u origin main
+```
+
+> **Password prompt gotcha:** GitHub no longer accepts your account password over HTTPS. Generate a **Personal Access Token** (github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → tick `repo` scope), and paste the token as the password.
+
 ---
 
 <a name="step-6"></a>
 ## Step 6 — Run your first detection
 
-**On a single picture first:**
+**Test on a still image first — no camera needed.** This is the milestone that proves the whole AI pipeline works, and you can reach it before your camera even arrives.
+
+Download a sample image (a stock test photo from Ultralytics), then run detection on it:
+
 ```bash
-yolo predict model=yolo11n.pt source=test.jpg
+wget https://ultralytics.com/images/bus.jpg
+yolo predict model=yolo11n.pt source=bus.jpg
 ```
-The first run downloads the model automatically. It saves a copy of your image with boxes + labels drawn on it into a `runs/detect/` folder. Open it — that's object detection working!
+
+The first run downloads the model file (`yolo11n.pt`, ~5MB) automatically. Real output from this build:
+
+```
+image 1/1 /home/oleg/cv-project/bus.jpg: 640x480 4 persons, 1 bus, 320.3ms
+Speed: 11.6ms preprocess, 320.3ms inference, 1.9ms postprocess per image
+Results saved to /home/oleg/cv-project/runs/detect/predict
+```
+
+It correctly found **4 people and 1 bus**. Open `runs/detect/predict/bus.jpg` to see the annotated image with boxes and labels drawn on.
+
+**Reading those numbers** (they matter later):
+- **320ms inference** = about a third of a second per image, so roughly **3 frames per second** on live video. That's the honest Pi-with-normal-camera figure.
+- **640x480** — YOLO resizes the input; you don't need a high-resolution camera.
+- Startup also prints `torch-2.13.0+cu130 CPU (aarch64)`, confirming it's running on the Pi's CPU (no GPU).
+
+> **A quirk worth knowing:** `pip install ultralytics` pulls in a pile of `nvidia-*` CUDA packages as PyTorch dependencies. The Pi has no NVIDIA GPU, so they sit unused — harmless, just some wasted disk space.
 
 **Now live, on the camera.** Create a file called `detect_live.py` with this content:
 
@@ -268,7 +330,7 @@ python detect_live.py
 
 A window opens with your live camera feed and labeled boxes. Wave a cup or your phone in front of it. **This is the core of the project working.** 🎉
 
-> **Speed note:** on a Pi 5 with a normal webcam, this runs at a modest frame rate. That's expected — the small computer is doing all the AI work. It's a real engineering tradeoff, not a bug (more in [tradeoffs](#what-i-learned)).
+> **Speed note:** on a Pi 5 with a normal webcam, expect around 3 FPS based on the 320ms inference time measured above. That's expected — the small computer is doing all the AI work. It's a real engineering tradeoff, not a bug (more in [tradeoffs](#what-i-learned)).
 
 ---
 

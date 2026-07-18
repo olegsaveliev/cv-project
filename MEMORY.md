@@ -7,10 +7,11 @@
 ---
 
 ## Where we are right now
-- **Current phase:** VS Code Remote-SSH connected to the Pi. `~/cv-project` created, all five `.md` files copied onto the Pi. Installing YOLO.
-- **Next step:** Finish `pip install ultralytics` in the venv, then run detection on a still image (no camera needed).
-- **Camera status:** ⏳ Logitech webcam NOT yet arrived. Everything except the two 📷 camera steps can be done now — including running detection on a still image.
-- **Key connection facts:** hostname `mypi` → `mypi.local` · username **`oleg`** · connect with `ssh oleg@mypi.local` or VS Code Remote-SSH. Project folder: `/home/oleg/cv-project`. Wi-Fi network "Oleg Kolo".
+- **Current phase:** ✅ YOLO installed and **working** — still-image detection confirmed (4 persons + 1 bus on the test image, 320ms inference). Project structure created, Git initialized, pushed to GitHub.
+- **Next step:** Wait for the webcam. When it arrives: `fswebcam test.jpg` to confirm capture, then create `detect_live.py` for live detection. Meanwhile: choose the custom object and start collecting photos.
+- **Camera status:** ⏳ Logitech webcam NOT yet arrived — the only remaining blocker for v1.
+- **Key facts:** hostname `mypi` → `mypi.local` · username **`oleg`** · project at `/home/oleg/cv-project` · GitHub: https://github.com/olegsaveliev/cv-project · branch `main` · venv activate: `source ~/cv-project/venv/bin/activate`
+- **Measured baseline:** 320ms inference per image on Pi 5 CPU ≈ **3 FPS** live. Use this honest number in the README.
 - **Last updated:** (set this each session)
 
 ---
@@ -49,8 +50,10 @@
 - [ ] 📷 Camera confirmed working (webcam: `fswebcam test.jpg` / ribbon: `rpicam-hello`)
 
 ### Phase 4 — Generic detection (v1 base)
-- [ ] ✅ `venv` created, `ultralytics` installed
-- [ ] ✅ Still-image detection works (`yolo predict ... source=test.jpg`) — **no camera needed; great milestone to hit now**
+- [x] ✅ `venv` created, `ultralytics` installed (ultralytics 8.4.100, torch 2.13.0, opencv 5.0.0.93)
+- [x] ✅ Still-image detection works — `yolo predict model=yolo11n.pt source=bus.jpg` → 4 persons, 1 bus, 320.3ms
+- [x] ✅ Project structure created (`models/`, `docs/`, `data/`, `requirements.txt`, `.gitignore`)
+- [x] ✅ Git initialized, first commits made, pushed to GitHub (`main` branch)
 - [ ] 📷 Live camera detection works (`detect_live.py`) *(needs webcam)*
 
 ### Phase 5 — Custom object (the showcase)
@@ -95,11 +98,18 @@
 - **Wi-Fi network name must match exactly.** Confirmed the SSID in `cat /Volumes/bootfs/network-config` against the real network. Country was correctly set to `UA`.
 - **Locale warnings on SSH login** (`LC_CTYPE`/`LC_ALL cannot change locale`). Harmless but noisy. Fix: generate the locale on the Pi — uncomment `en_US.UTF-8` in `/etc/locale.gen`, `sudo locale-gen`, `sudo update-locale`. (Quick-silence only: `sudo touch /var/lib/cloud/instance/locale-check.skip`.)
 - **Fan connector hard to reach.** Plug the fan into the J17 FAN header *while the case lid is still open*, then close the lid — not after.
+- **`git init` defaults to `master`, GitHub expects `main`.** Fix: `git branch -M main` before pushing.
+- **GitHub rejects your account password on push.** Need a Personal Access Token (Settings → Developer settings → Personal access tokens → classic → `repo` scope); paste the token as the password.
+- **VS Code extensions must be installed on the *remote* side.** With Remote-SSH, extensions that touch project files (e.g. Claude Code) show "Install in SSH: mypi.local" — click that, or they stay disabled in the workspace.
+- **`pip install ultralytics` pulls dozens of `nvidia-*` CUDA packages.** The Pi has no NVIDIA GPU; they're unused PyTorch dependencies. Harmless, just disk space.
+- **Careful which VS Code window is which.** One window was the Mac (`/Users/oleg/Desktop/cv-project`), the other the Pi (`SSH: mypi.local`). Work in the SSH one — check the green indicator bottom-left and that the terminal prompt reads `oleg@mypi`.
 
 ---
 
 ## Notes for the next session
 > Free-text scratchpad for "pick up here" reminders.
-- **Webcam still in transit.** Work the ✅ items now, in order: flash OS → first boot + update → VS Code Remote-SSH → copy `.md` files in → install YOLO → **run detection on a still image** (proves the whole AI pipeline with no camera). Then pause on 📷 items until the Logitech arrives.
-- In parallel (MacBook/browser, no Pi needed): create free Roboflow + Google Colab accounts; if the custom object is chosen, start taking the 50–150 phone photos.
-- When the webcam arrives: `fswebcam test.jpg` to confirm capture, then `detect_live.py` for live detection — only two steps to go live.
+- **Blocked only on the webcam now.** Everything camera-independent is done: OS, network, VS Code, YOLO, still-image detection, project structure, Git + GitHub.
+- **When the webcam arrives:** `sudo apt install -y fswebcam` → `fswebcam test.jpg` to confirm capture → create `detect_live.py` → `python detect_live.py` for live detection. Then record the demo GIF.
+- **Can do right now without hardware:** decide the custom object; create free Roboflow + Google Colab accounts; start taking the 50–150 phone photos.
+- **Remember:** activate the venv in every new terminal — `source ~/cv-project/venv/bin/activate` (prompt shows `(venv)`).
+- **Docs sync:** the `.md` files are edited in chat and must be re-downloaded into `~/cv-project` on the Pi, then committed.
