@@ -41,8 +41,11 @@ cv-project/
 │   └── best.pt           # custom model (after training) — don't commit huge files casually
 ├── docs/                 # things for the README
 │   └── demo.gif          # screen recording of it working (highest-impact asset)
-└── data/                 # dataset info
-    └── README.md         # DESCRIBE the dataset here; do NOT commit big image folders
+├── data/                 # dataset info
+│   └── README.md         # DESCRIBE the dataset here; do NOT commit big image folders
+└── FunkoPop/             # Phase 5 custom-object sub-project (the Funko Pop detector)
+    ├── README.md         # step-by-step training manual — PUBLISHED (public)
+    └── progress.md       # progress tracker — LOCAL ONLY, gitignored
 ```
 
 **Rules for keeping it tidy:**
@@ -51,6 +54,7 @@ cv-project/
 - The `venv/` virtual environment also lives in this folder but must **not** be committed to GitHub — add it to `.gitignore` (along with `runs/`, large images, and `*.pt` if they get big).
 - Create `models/`, `docs/`, `data/` only when the phase that needs them arrives (training, demo recording, dataset). Note their purpose in `BUILD-LOG.md` when you do.
 - When you add a new file or folder that a beginner following the README should know about, reflect it in `README.md`'s structure section too.
+- **Sub-projects get their own folder following the same two-file pattern.** The **Funko Pop custom-object work lives in [`FunkoPop/`](./FunkoPop/)** — a self-contained phase with its own docs, mirroring the root layout: **`FunkoPop/README.md`** is the *public step-by-step manual* (tools used, why, commands, links, Mermaid diagrams — written so anyone can follow it), and **`FunkoPop/progress.md`** is the *local-only, gitignored tracker* (like `BUILD-LOG.md` at the root). **When working on the Funko Pop detector: read both first, keep `progress.md` ticked off and current, and keep the manual accurate as steps actually happen.** Any future sub-project should follow this same shape.
 
 ## At the start of every session
 1. Read `DESIGN.md` and `BUILD-LOG.md`.
