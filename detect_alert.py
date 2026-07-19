@@ -1,4 +1,4 @@
-import os, time, requests
+import os, sys, time, requests
 from ultralytics import YOLO
 
 # --- config ---
@@ -6,6 +6,11 @@ TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 COOLDOWN = 60          # seconds between alerts for the same object
 CONFIDENCE = 0.7       # ignore weak detections
+
+# Run with "--people" to alert on people only. classes=[0] restricts YOLO to
+# COCO class 0 = "person"; classes=None (the default) reports all 80 objects.
+PEOPLE_ONLY = "--people" in sys.argv
+CLASSES = [0] if PEOPLE_ONLY else None
 
 model = YOLO("models/yolo11n.pt")
 last_alert = {}        # tracks when we last alerted per object type
@@ -26,11 +31,12 @@ def send(text, image_path=None):
         print(f"Telegram error: {e}")
 
 
-send("🟢 Detector started")
+send("🟢 Detector started (people only)" if PEOPLE_ONLY else "🟢 Detector started")
 print("Running. Ctrl+C to stop.")
 
 try:
-    for r in model.predict(source=0, stream=True, conf=CONFIDENCE, verbose=False):
+    for r in model.predict(source=0, stream=True, conf=CONFIDENCE,
+                           classes=CLASSES, verbose=False):
         now = time.time()
 
         # what did we see in this frame?

@@ -6,16 +6,18 @@ CHAT_ID = str(os.environ.get("TELEGRAM_CHAT_ID", ""))
 API = f"https://api.telegram.org/bot{TOKEN}"
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# a command -> the detector script it launches
+# a command -> the detector script (plus any args) it launches
 DETECTORS = {
-    "/start":  "detect_alert.py",    # photo alerts (default)
-    "/clip":   "detect_clip.py",     # short video clips
-    "/stream": "detect_stream.py",   # live browser view + alerts
+    "/start":  ["detect_alert.py"],              # photo alerts, all objects
+    "/people": ["detect_alert.py", "--people"],  # photo alerts, people only
+    "/clip":   ["detect_clip.py"],               # short video clips
+    "/stream": ["detect_stream.py"],             # live browser view + alerts
 }
 
 HELP = (
     "🤖 Camera controller\n"
-    "/start – photo alerts\n"
+    "/start – photo alerts (everything)\n"
+    "/people – photo alerts, people only\n"
     "/clip – video-clip alerts\n"
     "/stream – live view + alerts\n"
     "/stop – stop the camera\n"
@@ -49,18 +51,18 @@ def stop_detector():
     current = None
 
 
-def start_detector(script):
+def start_detector(script_args):
     global current
     stop_detector()                      # only one camera user at a time
     # same Python (venv) + same env (TELEGRAM_* already loaded), run in this folder
-    current = subprocess.Popen([sys.executable, script], cwd=HERE)
+    current = subprocess.Popen([sys.executable] + script_args, cwd=HERE)
 
 
 def handle(cmd):
     if cmd in DETECTORS:
-        script = DETECTORS[cmd]
-        start_detector(script)
-        send(f"🟢 Started: {script}")
+        script_args = DETECTORS[cmd]
+        start_detector(script_args)
+        send(f"🟢 Started: {' '.join(script_args)}")
     elif cmd == "/stop":
         if running():
             stop_detector()

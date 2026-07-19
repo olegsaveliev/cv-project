@@ -635,12 +635,15 @@ A small controller script (`telegram_control.py`) listens for commands and start
 
 | Command | Action |
 |---|---|
-| `/start` | Photo alerts |
+| `/start` | Photo alerts (all objects) |
+| `/people` | Photo alerts, people only |
 | `/clip` | Video-clip alerts |
 | `/stream` | Live browser view + alerts |
 | `/stop` | Stop the camera |
 | `/status` | Running or idle? |
 | `/help` | List commands |
+
+> **People-only mode** reuses the same alerting script with a `--people` flag rather than a second copy: `/people` launches `detect_alert.py --people`, which passes `classes=[0]` to YOLO (COCO class 0 = "person"), so the model only reports people. Any future change to the alerting logic applies to both modes automatically. (There's also a standalone `detect_people.py` for a quick terminal-only test without phone alerts.)
 
 The clever part is **how it reaches your Pi from anywhere without exposing it to the internet.** Your Pi sits behind your home router — normally unreachable from outside. Instead of opening a risky hole in your router, the controller just keeps *asking* Telegram's servers "any commands for me?" — an **outbound** call your router always allows. So you can be anywhere in the world, text your bot, and the Pi obeys — with nothing exposed and no ports forwarded. It also **only obeys your own chat ID**, so a stranger who finds the bot can't control your camera.
 
