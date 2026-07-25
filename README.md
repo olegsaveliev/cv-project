@@ -730,17 +730,20 @@ Run it again — now it detects your object. Everything else stays the same.
 
 > **Don't over-engineer v1.** A model trained on ~60 phone photos that detects one object at ~80% accuracy is a completely legitimate result. Ship it, then improve. "Working and honest" beats "ambitious and unfinished."
 
+> 📦 **Worked example:** I did exactly this with a **Funko Pop** detector — a full step-by-step manual (collect → label → train → deploy → debug → retrain) lives in [`FunkoPop/README.md`](./FunkoPop/README.md).
+
 ---
 
 <a name="what-i-learned"></a>
 ## What I learned / honest tradeoffs
 
-_[This section is where you write, in your own words, what surprised you and what you'd do differently. It's the part recruiters and other engineers read most closely — honesty reads as maturity. Some prompts to fill in:]_
+The custom-object phase — teaching it to recognise a **Funko Pop** — taught me the most, mostly because it failed first.
 
-- **Frame rate is a real constraint.** A Pi 5 doing all the AI work on a normal camera runs at a modest frame rate. That's the nature of edge hardware, and naming it honestly matters more than hiding it.
-- **Training belongs in the cloud.** The Pi is great at *running* a model but too slow to *train* one — so labeling happened in Roboflow and training on Google Colab's free GPUs.
-- **A small honest dataset works.** _[Fill in: how many photos you used, what accuracy you got, what confused the model.]_
-- **What I'd improve next.** _[Fill in: more varied photos? a bigger model? an alert when the object appears?]_
+- **Frame rate is a real constraint.** A Pi 5 doing all the AI work on a normal camera runs at a modest ~3–4 FPS. That's the nature of edge hardware, and naming it honestly matters more than hiding it.
+- **Training belongs in the cloud.** The Pi is great at *running* a model but too slow to *train* one — labelling happened in Roboflow and training on Google Colab's free GPU (YOLO11n, 100 epochs, ~8 minutes).
+- **A model is only as good as its negatives.** My first Funko model (51 photos, all Funkos) scored a near-perfect validation mAP — then confidently boxed my *legs* as a Funko in the real world. With no counter-examples, it had learned a shortcut ("tall object in frame = Funko") instead of the object itself. Adding **20 negative images** (people, rooms, clutter — no Funko) plus 30 more varied positives fixed it: the retrained model reached **mAP50 0.995** and, more importantly, stopped false-firing live.
+- **Validation scores can lie; real-world testing doesn't.** Both models scored ~0.98–0.99 on held-out images — only pointing the camera at the actual room revealed the difference. The live test was the honest one.
+- **What I'd improve next.** More background variety still; detecting individual characters (a multi-class v2); and porting to the AI Camera (IMX500) for on-sensor speed.
 
 ### Optional phase 2: the AI Camera (much faster)
 There's a **Raspberry Pi AI Camera (Sony IMX500)** that runs the neural network *on the camera sensor itself*, freeing the Pi's processor and making detection fast and smooth. Out-of-the-box detection is easy; using a **custom** model requires an extra step — exporting the model to the sensor's special IMX500 format and compiling it into a `.rpk` file with Sony's toolchain. It's the fiddliest part of the whole project, but documenting it clearly is genuinely useful to other developers. _[If you did phase 2, write up the conversion steps and any gotchas here.]_
