@@ -119,6 +119,8 @@ flowchart LR
 1. **Create a free account** at [roboflow.com](https://roboflow.com) and click **Create New Project**.
    - Project type: **Object Detection**
    - Annotation group / class name: **`funko_pop`**
+
+   > ⚠️ **Gotcha we hit — keep the class name distinct from the project name.** If the project name (e.g. `funko-pop-detector`) accidentally becomes a second class, you end up with a **two-class** model (`funko-pop` *and* `funko-pop-detector`) instead of one — which splits your training examples and muddies predictions. Before training, open Roboflow's **Health Check** and confirm there is exactly **one** class holding all the annotations.
 2. **Upload** all your photos (drag them in).
 3. **Annotate:** open each image and draw a tight box around every Funko Pop, labelling each `funko_pop`. Tight boxes = better training.
    - 💡 Roboflow's **"Label Assist" / Auto-Label** can pre-draw boxes for you to just correct — a big time saver once you've labelled a few by hand.
@@ -210,16 +212,36 @@ Now bring the trained model home to the device.
 2. **Test on a still image first** (no camera needed) — point a photo of a Funko at it:
    ```bash
    cd ~/cv-project && source venv/bin/activate
-   yolo predict model=models/best.pt source=some_funko_photo.jpg
+   yolo predict model=models/best.pt source=funko_test.jpg
    ```
-   Open the annotated result in `runs/detect/predict/` — you should see a `funko_pop` box.
-3. **Run it live.** The existing detection scripts take a model path — point one at `best.pt` instead of `yolo11n.pt`. That single change is the whole deployment:
+   Open the annotated result in `runs/detect/predict/`. **In this build the first test scored `1 funko-pop @ 0.98 confidence`** — a strong single-object result from ~100 phone photos.
+3. **Give the detector scripts a `--model` option** instead of hardcoding the path. Each script defaults to `yolo11n.pt` but accepts `--model models/best.pt`:
    ```python
-   model = YOLO("models/best.pt")   # your Funko model instead of the stock one
-   ```
-4. *(Later, optional)* wire a **`/funko` Telegram command** into `telegram_control.py`, exactly like `/people`, so you can start Funko-detection from your phone.
+   # a tiny argv helper in each detector
+   def arg_value(flag, default):
+       if flag in sys.argv:
+           i = sys.argv.index(flag)
+           if i + 1 < len(sys.argv):
+               return sys.argv[i + 1]
+       return default
 
-**The key point:** nothing else in the pipeline changes. The camera, the alerting, the cooldown, the web stream — all of it works identically. We only swapped the *brain*.
+   MODEL = arg_value("--model", "models/yolo11n.pt")
+   model = YOLO(MODEL)
+   ```
+   **Why an option and not a hardcoded swap:** the everyday-object modes keep working unchanged, and the Funko model runs alongside them via a flag — no editing code each time you switch brains.
+4. **Wire up phone commands** in `telegram_control.py` — three Funko modes, all on `best.pt`:
+
+   | Command | Runs |
+   |---|---|
+   | **`/funko`** | `detect_stream.py --model models/best.pt` — live browser view |
+   | **`/funkoalert`** | `detect_alert.py --model models/best.pt` — photo alerts |
+   | **`/funkoclip`** | `detect_clip.py --model models/best.pt --target funko-pop` — video clips |
+
+   **Why `/funkoclip` needs `--target funko-pop`:** the clip recorder only fires when it sees a specific *target* object, which defaulted to `"person"`. The Funko model has no "person" class, so without a `--target` option pointing at `funko-pop`, it would never trigger. `/funkoalert` needs no such flag because photo alerts fire on *any* label the model reports.
+
+   The stream modes also reply in Telegram with the **live-view URL** (`http://<pi-ip>:8000`) so you know exactly where to watch.
+
+**The key point:** nothing else in the pipeline changes — the camera, alerting, cooldown, and web stream all work identically. We only swapped the *brain* and added a flag to choose it.
 
 ---
 

@@ -1,4 +1,4 @@
-import os, time, threading
+import os, sys, time, threading
 import cv2, requests
 from flask import Flask, Response
 from ultralytics import YOLO
@@ -7,10 +7,22 @@ from ultralytics import YOLO
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 CONFIDENCE = 0.7        # ignore weak detections
-COOLDOWN = 60           # seconds between alerts for the same object
+COOLDOWN = 10           # seconds between alerts for the same object
 PORT = 8000             # open http://mypi.local:8000 on your laptop
 
-model = YOLO("models/yolo11n.pt")
+
+# Run with "--model PATH" to use a custom model (e.g. models/best.pt for Funkos).
+# Default is the stock yolo11n.pt.
+def arg_value(flag, default):
+    if flag in sys.argv:
+        i = sys.argv.index(flag)
+        if i + 1 < len(sys.argv):
+            return sys.argv[i + 1]
+    return default
+
+
+MODEL = arg_value("--model", "models/yolo11n.pt")
+model = YOLO(MODEL)
 
 # --- shared state between the detection thread and the web server ---
 latest_jpeg = None          # most recent annotated frame, JPEG-encoded
@@ -91,5 +103,6 @@ def video():
 if __name__ == "__main__":
     # detection runs in the background; the web server runs in the foreground
     threading.Thread(target=detection_loop, daemon=True).start()
+    print(f"Model: {MODEL}")
     print(f"Live view:  http://mypi.local:{PORT}   (Ctrl+C to stop)")
     app.run(host="0.0.0.0", port=PORT, threaded=True)

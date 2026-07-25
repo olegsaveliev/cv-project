@@ -1,4 +1,4 @@
-import os, time, subprocess, requests
+import os, sys, time, subprocess, requests
 import cv2
 from ultralytics import YOLO
 
@@ -6,8 +6,7 @@ from ultralytics import YOLO
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 CONFIDENCE = 0.7        # ignore weak detections
-COOLDOWN = 60           # seconds between clips, so it doesn't spam
-TARGET = "person"       # which object triggers a clip
+COOLDOWN = 10           # seconds between clips, so it doesn't spam
 CLIP_FRAMES = 24        # annotated frames to capture (~6-7s at ~3.4 FPS)
 
 # clips are kept on the Pi as "latest only" (overwritten each time):
@@ -18,7 +17,18 @@ FINAL_PATH = "videos/final/clip.mp4"
 os.makedirs(os.path.dirname(RAW_PATH), exist_ok=True)
 os.makedirs(os.path.dirname(FINAL_PATH), exist_ok=True)
 
-model = YOLO("models/yolo11n.pt")
+# Run with "--model PATH" to use a custom model (e.g. models/best.pt for Funkos).
+def arg_value(flag, default):
+    if flag in sys.argv:
+        i = sys.argv.index(flag)
+        if i + 1 < len(sys.argv):
+            return sys.argv[i + 1]
+    return default
+
+
+MODEL = arg_value("--model", "models/yolo11n.pt")
+TARGET = arg_value("--target", "person")   # object whose appearance triggers a clip
+model = YOLO(MODEL)
 
 
 def send_text(text):

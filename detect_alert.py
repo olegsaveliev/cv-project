@@ -4,7 +4,7 @@ from ultralytics import YOLO
 # --- config ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-COOLDOWN = 60          # seconds between alerts for the same object
+COOLDOWN = 10          # seconds between alerts for the same object
 CONFIDENCE = 0.7       # ignore weak detections
 
 # Run with "--people" to alert on people only. classes=[0] restricts YOLO to
@@ -12,7 +12,18 @@ CONFIDENCE = 0.7       # ignore weak detections
 PEOPLE_ONLY = "--people" in sys.argv
 CLASSES = [0] if PEOPLE_ONLY else None
 
-model = YOLO("models/yolo11n.pt")
+
+# Run with "--model PATH" to use a custom model (e.g. models/best.pt for Funkos).
+def arg_value(flag, default):
+    if flag in sys.argv:
+        i = sys.argv.index(flag)
+        if i + 1 < len(sys.argv):
+            return sys.argv[i + 1]
+    return default
+
+
+MODEL = arg_value("--model", "models/yolo11n.pt")
+model = YOLO(MODEL)
 last_alert = {}        # tracks when we last alerted per object type
 
 

@@ -1,4 +1,4 @@
-import os, sys, time, subprocess, requests
+import os, sys, time, socket, subprocess, requests
 
 # --- config ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -12,6 +12,9 @@ DETECTORS = {
     "/people": ["detect_alert.py", "--people"],  # photo alerts, people only
     "/clip":   ["detect_clip.py"],               # short video clips
     "/stream": ["detect_stream.py"],             # live browser view + alerts
+    "/funko":  ["detect_stream.py", "--model", "models/best.pt"],  # live Funko detection (custom model)
+    "/funkoalert": ["detect_alert.py", "--model", "models/best.pt"],                          # Funko photo alerts
+    "/funkoclip":  ["detect_clip.py", "--model", "models/best.pt", "--target", "funko-pop"],  # Funko video clips
 }
 
 HELP = (
@@ -20,6 +23,9 @@ HELP = (
     "/people – photo alerts, people only\n"
     "/clip – video-clip alerts\n"
     "/stream – live view + alerts\n"
+    "/funko – live Funko detection (custom model)\n"
+    "/funkoalert – Funko photo alerts\n"
+    "/funkoclip – Funko video clips\n"
     "/stop – stop the camera\n"
     "/status – is it running?\n"
     "/help – this message"
@@ -58,11 +64,26 @@ def start_detector(script_args):
     current = subprocess.Popen([sys.executable] + script_args, cwd=HERE)
 
 
+def get_ip():
+    """Best-effort LAN IP of the Pi, for the live-view URL."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))       # no packets sent; just picks the outbound interface
+        return s.getsockname()[0]
+    except Exception:
+        return "mypi.local"
+    finally:
+        s.close()
+
+
 def handle(cmd):
     if cmd in DETECTORS:
         script_args = DETECTORS[cmd]
         start_detector(script_args)
-        send(f"🟢 Started: {' '.join(script_args)}")
+        msg = f"🟢 Started: {' '.join(script_args)}"
+        if "detect_stream.py" in script_args:      # stream modes have a browser view
+            msg += f"\n🌐 Live view: http://{get_ip()}:8000"
+        send(msg)
     elif cmd == "/stop":
         if running():
             stop_detector()
