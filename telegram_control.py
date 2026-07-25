@@ -10,6 +10,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DETECTORS = {
     "/start":  ["detect_alert.py"],              # photo alerts, all objects
     "/people": ["detect_alert.py", "--people"],  # photo alerts, people only
+    "/describe": ["detect_alert.py", "--people", "--describe"],  # people alerts + AI scene description
     "/clip":   ["detect_clip.py"],               # short video clips
     "/stream": ["detect_stream.py"],             # live browser view + alerts
     "/funko":  ["detect_stream.py", "--model", "models/best.pt"],  # live Funko detection (custom model)
@@ -21,6 +22,7 @@ HELP = (
     "🤖 Camera controller\n"
     "/start – photo alerts (everything)\n"
     "/people – photo alerts, people only\n"
+    "/describe – people alerts + AI scene description\n"
     "/clip – video-clip alerts\n"
     "/stream – live view + alerts\n"
     "/funko – live Funko detection (custom model)\n"
